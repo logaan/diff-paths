@@ -70,3 +70,27 @@
 
 (fact (diff-paths before after) => expected-output)
 
+
+(comment
+  (def state
+    (atom before))
+
+  (defn monkey-is-moving [new-state]
+    (println "the monkey is moving"))
+
+  (def subscribers
+    {[:monkey :height] #{monkey-is-moving}})
+
+  (add-watch state :diff
+             (fn [_key _ref old new]
+               (->> (diff-paths old new)
+                    (mapcat #(subscribers %))
+                    (map #(% new))
+                    doall)))
+
+  ; Only prints twice.
+  (reset! state before)
+  (reset! state after)
+  (reset! state before)
+  (reset! state before))
+
