@@ -2,6 +2,37 @@
   (:require [midje.sweet :refer [fact]]
             [clojure.data :refer :all]))
 
+(defprotocol Path
+  (paths [this]))
+
+(extend-protocol Path
+  java.lang.Object
+  (paths [this] #{})
+
+  clojure.lang.PersistentArrayMap
+  (paths [this]
+    (set (concat (map list (keys this))
+                 (mapcat (fn [[k v]] (map #(conj % k) (paths v))) this))))
+
+  clojure.lang.PersistentVector
+  (paths [this]
+    (->> (map-indexed vector this)
+         (mapcat (fn [[k v]]
+                   (conj (map #(conj % k) (paths v))
+                         (list k))))
+         set)))
+
+(fact (paths {:foo {:baz {:kittens 8 :ducks 9} :so 2} :bar 2})
+      => '#{(:foo :baz :kittens) (:foo :so) (:foo) (:bar) (:foo :baz :ducks) (:foo :baz)})
+
+(fact (paths [1]) => '#{[0]})
+(fact (paths [1 2]) => '#{[0] [1]})
+(fact (paths [[1 2] 3]) => '#{[0] [0 0] [0 1] [1]})
+
+(defn diff-paths [before after]
+  (let [[gone came _stayed] (diff before after)]
+    (paths (merge gone came))))
+
 (def before
   {:monkey {:height 50 :velocity 0}
    :pipes  [[50 200] [250 300] [450 400]]
@@ -37,37 +68,5 @@
     [:pipes 2 0]
     [:last-update]})
 
-; Take first two
-; Transform them into a set of paths into the data
-; Merge those sets
-(diff before after)
+(fact (diff-paths before after) => expected-output)
 
-(defprotocol Path
-  (paths [this]))
-
-(extend-protocol Path
-  java.lang.Object
-  (paths [this] #{})
-
-  clojure.lang.PersistentArrayMap
-  (paths [this]
-    (set (concat (map list (keys this))
-                 (mapcat (fn [[k v]] (map #(conj % k) (paths v))) this))))
-
-  clojure.lang.PersistentVector
-  (paths [this]
-    (->> (map-indexed vector this)
-         (mapcat (fn [[k v]]
-                   (conj (map #(conj % k) (paths v))
-                         (list k))))
-         set)))
-
-(fact (paths {:foo {:baz {:kittens 8 :ducks 9} :so 2} :bar 2})
-      => '#{(:foo :baz :kittens) (:foo :so) (:foo) (:bar) (:foo :baz :ducks) (:foo :baz)})
-
-(fact (paths [1]) => '#{[0]})
-(fact (paths [1 2]) => '#{[0] [1]})
-(fact (paths [[1 2] 3]) => '#{[0] [0 0] [0 1] [1]})
-
-(fact (paths (apply merge (take 2 (diff before after))))
-      => expected-output)
